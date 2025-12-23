@@ -5,9 +5,13 @@ agents:
     description: "Alfred - AI-powered assistant agent"
     provider: claude-code
     image: alfred
-    beta_system_prompt: AGENTS.md
-    beta_system_skills:
+    instructions: AGENTS.md
+    skills:
       - https://github.com/vm0-ai/vm0-skills/tree/main/elevenlabs
+      - https://github.com/vm0-ai/vm0-skills/tree/main/openai
+      - https://github.com/vm0-ai/vm0-skills/tree/main/firecrawl
     environment:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FIRECRAWL: ${{ secrets.FIRECRAWL }}
