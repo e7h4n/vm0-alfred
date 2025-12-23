@@ -6,8 +6,8 @@ on:
       recording_id:
         description: 'Recording ID from voice input'
         required: true
-      auth_token:
-        description: 'Authentication token'
+      api_key:
+        description: 'API key for authentication'
         required: true
       docs_url:
         description: 'Documentation URL'
@@ -21,7 +21,7 @@ jobs:
         uses: vm0-ai/run-action@v1
         with:
           agent: alfred
-          prompt: "recording_id: ${{ github.event.inputs.recording_id }} auth_token: ${{ github.event.inputs.auth_token }} docs_url: ${{ github.event.inputs.docs_url }}"
+          prompt: "recording_id: ${{ github.event.inputs.recording_id }} api_key: ${{ github.event.inputs.api_key }} docs_url: ${{ github.event.inputs.docs_url }}"
           vm0-token: ${{ secrets.VM0_TOKEN }}
           secrets: |
             CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
