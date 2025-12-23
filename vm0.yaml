@@ -10,8 +10,26 @@ agents:
       - https://github.com/vm0-ai/vm0-skills/tree/main/elevenlabs
       - https://github.com/vm0-ai/vm0-skills/tree/main/openai
       - https://github.com/vm0-ai/vm0-skills/tree/main/firecrawl
+      - https://github.com/vm0-ai/vm0-skills/tree/main/notion
+      - https://github.com/vm0-ai/vm0-skills/tree/main/plausible
+      - https://github.com/vm0-ai/vm0-skills/tree/main/slack
+      - https://github.com/vm0-ai/vm0-skills/tree/main/github
+      - https://github.com/vm0-ai/vm0-skills/tree/main/pushinator
+      - https://github.com/vm0-ai/vm0-skills/tree/main/minimax
+      - https://github.com/vm0-ai/vm0-skills/tree/main/imgur
+      - https://github.com/vm0-ai/vm0-skills/tree/main/hackernews
+      - https://github.com/vm0-ai/vm0-skills/tree/main/apify
     environment:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      PLAUSIBLE_API_KEY: ${{ secrets.PLAUSIBLE_API_KEY }}
+      PLAUSIBLE_SITE_ID: ${{ secrets.PLAUSIBLE_SITE_ID }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PUSHINATOR_API_KEY: ${{ secrets.PUSHINATOR_API_KEY }}
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      IMGUR_CLIENT_ID: ${{ secrets.IMGUR_CLIENT_ID }}
+      APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
