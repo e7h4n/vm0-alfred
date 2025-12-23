@@ -16,12 +16,17 @@ on:
 jobs:
   run-alfred:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Run Alfred Agent
+        id: vm0
         uses: vm0-ai/run-action@v1
         with:
           agent: alfred
           prompt: "recording_id: ${{ github.event.inputs.recording_id }} api_key: ${{ github.event.inputs.api_key }} docs_url: ${{ github.event.inputs.docs_url }}"
+          session-id: ${{ vars.VM0_SESSION_ID }}
           vm0-token: ${{ secrets.VM0_TOKEN }}
           secrets: |
             CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -37,3 +42,8 @@ jobs:
             APIFY_API_TOKEN=${{ secrets.APIFY_API_TOKEN }}
           vars: |
             PLAUSIBLE_SITE_ID=${{ vars.PLAUSIBLE_SITE_ID }}
+      - name: Save session ID
+        if: steps.vm0.outputs.session-id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh variable set VM0_SESSION_ID --body "${{ steps.vm0.outputs.session-id }}"
