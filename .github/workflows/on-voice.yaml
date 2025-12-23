@@ -3,8 +3,11 @@ name: Run Alfred
 on:
   workflow_dispatch:
     inputs:
-      prompt:
-        description: 'Prompt for the agent'
+      recording_id:
+        description: 'Recording ID from voice input'
+        required: true
+      auth_token:
+        description: 'Authentication token'
         required: true
 
 jobs:
@@ -15,7 +18,8 @@ jobs:
         uses: vm0-ai/run-action@v1
         with:
           agent: alfred
-          prompt: ${{ github.event.inputs.prompt }}
+          recording_id: ${{ github.event.inputs.recording_id }}
+          auth_token: ${{ github.event.inputs.auth_token }}
           artifact-name: alfred-output
           vm0-token: ${{ secrets.VM0_TOKEN }}
           secrets: |
