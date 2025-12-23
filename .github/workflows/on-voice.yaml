@@ -45,5 +45,5 @@ jobs:
       - name: Save session ID
         if: steps.vm0.outputs.session-id != ''
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_ALFRED_VAR_TOKEN }}
         run: gh variable set VM0_SESSION_ID --body "${{ steps.vm0.outputs.session-id }}"
