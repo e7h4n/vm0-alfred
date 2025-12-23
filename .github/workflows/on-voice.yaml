@@ -27,4 +27,4 @@ jobs:
             CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
             ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            FIRECRAWL=${{ secrets.FIRECRAWL }}
+            FIRECRAWL_API_KEY=${{ secrets.FIRECRAWL_API_KEY }}
