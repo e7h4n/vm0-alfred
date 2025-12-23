@@ -18,8 +18,7 @@ jobs:
         uses: vm0-ai/run-action@v1
         with:
           agent: alfred
-          recording_id: ${{ github.event.inputs.recording_id }}
-          auth_token: ${{ github.event.inputs.auth_token }}
+          prompt: "recording_id: ${{ github.event.inputs.recording_id }} auth_token: ${{ github.event.inputs.auth_token }}"
           artifact-name: alfred-output
           vm0-token: ${{ secrets.VM0_TOKEN }}
           secrets: |
