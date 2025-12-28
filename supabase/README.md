@@ -9,7 +9,7 @@ Supabase migrations and Edge Functions are automatically deployed when pushing t
 | Secret | Description |
 |--------|-------------|
 | SUPABASE_ACCESS_TOKEN | Personal access token from [Supabase Dashboard](https://supabase.com/dashboard/account/tokens) |
-| SUPABASE_DB_URL | Database connection string (Transaction Pooler) |
+| SUPABASE_DB_PASSWORD | Database password |
 
 ### Required GitHub Variables
 
@@ -74,7 +74,7 @@ supabase functions deploy
 | SUPABASE_PROJECT_REF | var | Project reference ID |
 | SUPABASE_SECRET_KEY | secret | Service role key |
 | SUPABASE_ACCESS_TOKEN | secret | Personal access token |
-| SUPABASE_DB_URL | secret | Database connection string |
+| SUPABASE_DB_PASSWORD | secret | Database password |
 
 ### Supabase Edge Function Secrets
 
