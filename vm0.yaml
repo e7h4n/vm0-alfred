@@ -18,6 +18,7 @@ agents:
       - https://github.com/vm0-ai/vm0-skills/tree/main/minimax
       - https://github.com/vm0-ai/vm0-skills/tree/main/hackernews
       - https://github.com/vm0-ai/vm0-skills/tree/main/apify
+      - https://github.com/vm0-ai/vm0-skills/tree/main/supabase
     environment:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -30,4 +31,7 @@ agents:
       PUSHINATOR_API_KEY: ${{ secrets.PUSHINATOR_API_KEY }}
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
       APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       PLAUSIBLE_SITE_ID: ${{ vars.PLAUSIBLE_SITE_ID }}
