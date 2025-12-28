@@ -113,6 +113,37 @@ serve(async (req) => {
       });
     }
 
+    // Trigger GitHub Actions workflow
+    const githubToken = Deno.env.get("GITHUB_TOKEN");
+    if (githubToken) {
+      try {
+        const workflowResponse = await fetch(
+          "https://api.github.com/repos/e7h4n/vm0-alfred/actions/workflows/on-voice.yaml/dispatches",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${githubToken}`,
+              "Accept": "application/vnd.github.v3+json",
+              "Content-Type": "application/json",
+              "User-Agent": "supabase-edge-function",
+            },
+            body: JSON.stringify({
+              ref: "main",
+              inputs: {
+                recording_id: recording.id,
+              },
+            }),
+          }
+        );
+
+        if (!workflowResponse.ok) {
+          console.error("Failed to trigger workflow:", await workflowResponse.text());
+        }
+      } catch (workflowError) {
+        console.error("Error triggering workflow:", workflowError);
+      }
+    }
+
     // Return success response
     return new Response(
       JSON.stringify({
