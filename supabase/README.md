@@ -1,6 +1,34 @@
 # Supabase Setup
 
-## 1. Database Setup
+## Automatic Deployment (CI/CD)
+
+Supabase migrations and Edge Functions are automatically deployed when pushing to `main` branch (changes in `supabase/` directory).
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| SUPABASE_ACCESS_TOKEN | Personal access token from [Supabase Dashboard](https://supabase.com/dashboard/account/tokens) |
+| SUPABASE_DB_URL | Database connection string (Transaction Pooler) |
+
+### Required GitHub Variables
+
+| Variable | Description |
+|----------|-------------|
+| SUPABASE_PROJECT_REF | Project reference ID (e.g., `dskmralypjipsbduefve`) |
+
+### Supabase Edge Function Secrets
+
+Set these via `supabase secrets set`:
+
+| Secret | Description |
+|--------|-------------|
+| UPLOAD_API_KEY | API key for ESP32 upload endpoint |
+| GITHUB_TOKEN | GitHub PAT for triggering workflows |
+
+## Manual Setup
+
+### 1. Database Setup
 
 Run the SQL migrations in Supabase SQL Editor:
 
@@ -10,65 +38,29 @@ supabase/migrations/001_create_recordings.sql
 
 # 2. Create storage bucket
 supabase/migrations/002_create_storage_bucket.sql
+
+# 3. Add played field
+supabase/migrations/003_add_played_field.sql
 ```
 
-## 2. Deploy Edge Function
+### 2. Deploy Edge Functions
 
 ```bash
-# Install Supabase CLI if not installed
+# Install Supabase CLI
 npm install -g supabase
 
-# Login to Supabase
+# Login
 supabase login
 
-# Link to your project
+# Link project
 supabase link --project-ref dskmralypjipsbduefve
 
-# Set secrets for the Edge Function
-supabase secrets set UPLOAD_API_KEY=YOUR_API_KEY
+# Set secrets
+supabase secrets set UPLOAD_API_KEY=your_key
+supabase secrets set GITHUB_TOKEN=your_github_pat
 
-# Deploy the function
-supabase functions deploy upload-recording
-```
-
-## 3. API Usage
-
-### Upload Recording
-
-**Endpoint:** `POST https://dskmralypjipsbduefve.supabase.co/functions/v1/upload-recording`
-
-**Headers:**
-- `x-api-key`: Your UPLOAD_API_KEY
-- `Content-Type`: `multipart/form-data` or `audio/mpeg`
-
-**Request (multipart/form-data):**
-```bash
-curl -X POST \
-  'https://dskmralypjipsbduefve.supabase.co/functions/v1/upload-recording' \
-  -H 'x-api-key: YOUR_API_KEY' \
-  -F 'file=@recording.mp3'
-```
-
-**Request (raw binary):**
-```bash
-curl -X POST \
-  'https://dskmralypjipsbduefve.supabase.co/functions/v1/upload-recording' \
-  -H 'x-api-key: YOUR_API_KEY' \
-  -H 'Content-Type: audio/mpeg' \
-  --data-binary @recording.mp3
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "recording": {
-    "id": "uuid",
-    "file_path": "user/1234567890_recording.mp3",
-    "status": "pending",
-    "created_at": "2025-12-28T10:00:00Z"
-  }
-}
+# Deploy all functions
+supabase functions deploy
 ```
 
 ## Environment Variables
@@ -79,15 +71,19 @@ curl -X POST \
 |----------|------|-------------|
 | SUPABASE_URL | var | Supabase project URL |
 | SUPABASE_PUBLISHABLE_KEY | var | Public anon key |
+| SUPABASE_PROJECT_REF | var | Project reference ID |
 | SUPABASE_SECRET_KEY | secret | Service role key |
+| SUPABASE_ACCESS_TOKEN | secret | Personal access token |
+| SUPABASE_DB_URL | secret | Database connection string |
 
-### Supabase Edge Function
+### Supabase Edge Function Secrets
 
 | Variable | Description |
 |----------|-------------|
-| UPLOAD_API_KEY | API key for upload endpoint (set via `supabase secrets set`) |
+| UPLOAD_API_KEY | API key for upload endpoint |
+| GITHUB_TOKEN | GitHub PAT for triggering workflows |
 
-### Device (单片机)
+### Device (ESP32)
 
 | Variable | Description |
 |----------|-------------|

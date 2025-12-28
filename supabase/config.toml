@@ -1,0 +1,13 @@
+# Supabase Edge Functions Configuration
+
+[functions.upload-recording]
+verify_jwt = false
+
+[functions.list-recordings]
+verify_jwt = false
+
+[functions.download-recording]
+verify_jwt = false
+
+[functions.mark-played]
+verify_jwt = false
