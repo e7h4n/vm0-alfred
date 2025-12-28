@@ -25,7 +25,7 @@ supabase login
 supabase link --project-ref dskmralypjipsbduefve
 
 # Set secrets for the Edge Function
-supabase secrets set UPLOAD_API_KEY=5ac2de2c7a44e416e78e260b1ef922f3
+supabase secrets set UPLOAD_API_KEY=YOUR_API_KEY
 
 # Deploy the function
 supabase functions deploy upload-recording
@@ -45,7 +45,7 @@ supabase functions deploy upload-recording
 ```bash
 curl -X POST \
   'https://dskmralypjipsbduefve.supabase.co/functions/v1/upload-recording' \
-  -H 'x-api-key: 5ac2de2c7a44e416e78e260b1ef922f3' \
+  -H 'x-api-key: YOUR_API_KEY' \
   -F 'file=@recording.mp3'
 ```
 
@@ -53,7 +53,7 @@ curl -X POST \
 ```bash
 curl -X POST \
   'https://dskmralypjipsbduefve.supabase.co/functions/v1/upload-recording' \
-  -H 'x-api-key: 5ac2de2c7a44e416e78e260b1ef922f3' \
+  -H 'x-api-key: YOUR_API_KEY' \
   -H 'Content-Type: audio/mpeg' \
   --data-binary @recording.mp3
 ```
