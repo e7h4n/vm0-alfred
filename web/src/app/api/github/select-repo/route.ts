@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import sodium from 'libsodium-wrappers'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -13,6 +14,99 @@ export async function POST(request: Request) {
   const { repo } = await request.json()
   if (!repo) {
     return NextResponse.json({ error: 'repo is required' }, { status: 400 })
+  }
+
+  // Get user's GitHub token
+  const { data: githubData, error: githubError } = await supabase
+    .from('github_tokens')
+    .select('access_token')
+    .eq('user_id', user.id)
+    .single()
+
+  if (githubError || !githubData) {
+    return NextResponse.json({ error: 'GitHub not linked' }, { status: 400 })
+  }
+
+  // Generate device token for this repo
+  const tokenBytes = new Uint8Array(32)
+  crypto.getRandomValues(tokenBytes)
+  const deviceToken = Array.from(tokenBytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+
+  // Set expiration to 1 year
+  const expiresAt = new Date()
+  expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+
+  // Save device token
+  const { error: tokenError } = await supabase
+    .from('device_tokens')
+    .insert({
+      user_id: user.id,
+      token: deviceToken,
+      name: `GitHub Action: ${repo}`,
+      expires_at: expiresAt.toISOString(),
+    })
+
+  if (tokenError) {
+    console.error('Failed to create device token:', tokenError)
+    return NextResponse.json({ error: 'Failed to create token' }, { status: 500 })
+  }
+
+  // Set GitHub secret
+  try {
+    await sodium.ready
+
+    // Get repo public key
+    const keyResponse = await fetch(
+      `https://api.github.com/repos/${repo}/actions/secrets/public-key`,
+      {
+        headers: {
+          'Authorization': `Bearer ${githubData.access_token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      }
+    )
+
+    if (!keyResponse.ok) {
+      const error = await keyResponse.text()
+      console.error('Failed to get public key:', error)
+      return NextResponse.json({ error: 'Failed to get repo public key' }, { status: 500 })
+    }
+
+    const { key, key_id } = await keyResponse.json()
+
+    // Encrypt the token
+    const binkey = sodium.from_base64(key, sodium.base64_variants.ORIGINAL)
+    const binsec = sodium.from_string(deviceToken)
+    const encBytes = sodium.crypto_box_seal(binsec, binkey)
+    const encryptedValue = sodium.to_base64(encBytes, sodium.base64_variants.ORIGINAL)
+
+    // Set the secret
+    const secretResponse = await fetch(
+      `https://api.github.com/repos/${repo}/actions/secrets/ALFRED_TOKEN`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${githubData.access_token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          encrypted_value: encryptedValue,
+          key_id: key_id,
+        }),
+      }
+    )
+
+    if (!secretResponse.ok) {
+      const error = await secretResponse.text()
+      console.error('Failed to set secret:', error)
+      return NextResponse.json({ error: 'Failed to set GitHub secret' }, { status: 500 })
+    }
+  } catch (error) {
+    console.error('Error setting GitHub secret:', error)
+    return NextResponse.json({ error: 'Failed to set GitHub secret' }, { status: 500 })
   }
 
   // Update github_tokens with selected repo

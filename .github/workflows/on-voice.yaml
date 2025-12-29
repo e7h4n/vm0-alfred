@@ -35,7 +35,7 @@ jobs:
             PUSHINATOR_API_KEY=${{ secrets.PUSHINATOR_API_KEY }}
             MINIMAX_API_KEY=${{ secrets.MINIMAX_API_KEY }}
             APIFY_API_TOKEN=${{ secrets.APIFY_API_TOKEN }}
-            SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }}
+            ALFRED_TOKEN=${{ secrets.ALFRED_TOKEN }}
           vars: |
             PLAUSIBLE_SITE_ID=${{ vars.PLAUSIBLE_SITE_ID }}
             SUPABASE_URL=${{ vars.SUPABASE_URL }}
