@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const { origin } = new URL(request.url)
   const redirectUri = `${origin}/api/github/callback`
-  const scope = 'repo workflow'
+  const scope = 'repo'
   const state = user.id // Use user ID as state for verification
 
   const githubAuthUrl = new URL('https://github.com/login/oauth/authorize')
