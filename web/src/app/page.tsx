@@ -34,7 +34,13 @@ export default function HomePage() {
   const [generatingToken, setGeneratingToken] = useState(false)
   const [githubLinked, setGithubLinked] = useState<boolean | null>(null)
   const [unlinkingGithub, setUnlinkingGithub] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const startTimeRef = useRef<number>(0)
   const supabase = createClient()
 
   useEffect(() => {
@@ -147,23 +153,69 @@ export default function HomePage() {
     setLoading(false)
   }
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
+  const startRecording = async () => {
+    if (!user) return
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      mediaRecorderRef.current = mediaRecorder
+      chunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const duration = (Date.now() - startTimeRef.current) / 1000
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        stream.getTracks().forEach(track => track.stop())
+        await uploadRecording(blob, duration)
+      }
+
+      startTimeRef.current = Date.now()
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      }, 1000)
+    } catch (error) {
+      console.error('Failed to start recording:', error)
+      alert('Failed to access microphone')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }
+
+  const uploadRecording = async (blob: Blob, duration: number) => {
+    if (!user) return
 
     setUploading(true)
     try {
       const timestamp = Date.now()
-      const filePath = `user/${user.id}/${timestamp}_${file.name}`
+      const filePath = `user/${user.id}/${timestamp}_recording.webm`
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('recordings')
-        .upload(filePath, file)
+        .upload(filePath, blob, { contentType: 'audio/webm' })
 
       if (uploadError) throw uploadError
 
-      // Create database record with user_id
+      // Create database record with user_id and duration
       const { error: dbError } = await supabase
         .from('recordings')
         .insert({
@@ -171,6 +223,7 @@ export default function HomePage() {
           sender: 'user',
           status: 'pending',
           user_id: user.id,
+          duration: Math.round(duration),
         })
 
       if (dbError) throw dbError
@@ -182,8 +235,13 @@ export default function HomePage() {
       alert('Failed to upload')
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
+  }
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   const playRecording = async (recording: Recording) => {
@@ -318,20 +376,42 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Upload Section */}
+        {/* Record Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Upload Recording</h2>
-          <label className="block">
-            <span className="sr-only">Choose audio file</span>
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={handleUpload}
-              disabled={uploading}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
-            />
-          </label>
-          {uploading && <p className="mt-2 text-sm text-gray-500">Uploading...</p>}
+          <h2 className="text-lg font-semibold mb-4">Record Voice</h2>
+          <div className="flex items-center gap-4">
+            {isRecording ? (
+              <>
+                <button
+                  onClick={stopRecording}
+                  disabled={uploading}
+                  className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <rect x="6" y="6" width="8" height="8" rx="1" />
+                  </svg>
+                  Stop
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                  <span className="text-lg font-mono text-gray-700">{formatRecordingTime(recordingTime)}</span>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={startRecording}
+                disabled={uploading}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 2a3 3 0 00-3 3v5a3 3 0 006 0V5a3 3 0 00-3-3z" />
+                  <path d="M5 10a1 1 0 00-2 0 7 7 0 1014 0 1 1 0 10-2 0 5 5 0 01-10 0z" />
+                </svg>
+                Start Recording
+              </button>
+            )}
+          </div>
+          {uploading && <p className="mt-4 text-sm text-gray-500">Uploading...</p>}
         </div>
 
         {/* Recordings List */}
@@ -367,6 +447,11 @@ export default function HomePage() {
                         }`}>
                           {recording.status}
                         </span>
+                        {recording.duration && (
+                          <span className="text-xs text-gray-500">
+                            {formatRecordingTime(recording.duration)}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-500">
                           {formatDate(recording.created_at)}
                         </span>
