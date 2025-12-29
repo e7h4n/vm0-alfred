@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-api-key, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-api-key, x-device-token, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -25,15 +25,51 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Authentication: support both x-api-key and JWT Bearer token
+  // Authentication: support x-device-token, JWT Bearer token, or x-api-key
   let userId: string | null = null;
   let githubToken: string | null = null;
 
+  const deviceToken = req.headers.get("x-device-token");
   const authHeader = req.headers.get("authorization");
   const apiKey = req.headers.get("x-api-key");
   const expectedKey = Deno.env.get("UPLOAD_API_KEY");
 
-  if (authHeader?.startsWith("Bearer ")) {
+  if (deviceToken) {
+    // Device token authentication (long-lived, 1 year)
+    const { data: tokenData, error: tokenError } = await supabaseAdmin
+      .from("device_tokens")
+      .select("user_id, expires_at")
+      .eq("token", deviceToken)
+      .single();
+
+    if (tokenError || !tokenData) {
+      return new Response(JSON.stringify({ error: "Invalid device token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check expiration
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return new Response(JSON.stringify({ error: "Device token expired" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    userId = tokenData.user_id;
+
+    // Get user's GitHub token from database
+    const { data: ghToken } = await supabaseAdmin
+      .from("github_tokens")
+      .select("access_token")
+      .eq("user_id", userId)
+      .single();
+
+    if (ghToken) {
+      githubToken = ghToken.access_token;
+    }
+  } else if (authHeader?.startsWith("Bearer ")) {
     // JWT authentication - extract user from token
     const token = authHeader.replace("Bearer ", "");
     const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {

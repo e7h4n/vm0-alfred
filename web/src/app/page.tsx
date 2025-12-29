@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState, useRef } from 'react'
-import { User, Session } from '@supabase/supabase-js'
+import { User } from '@supabase/supabase-js'
 
 interface Recording {
   id: string
@@ -15,15 +15,23 @@ interface Recording {
   created_at: string
 }
 
+interface DeviceToken {
+  id: string
+  token: string
+  name: string | null
+  expires_at: string
+  created_at: string
+}
+
 export default function HomePage() {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [playingId, setPlayingId] = useState<string | null>(null)
-  const [showToken, setShowToken] = useState(false)
-  const [deviceToken, setDeviceToken] = useState<string | null>(null)
+  const [deviceTokens, setDeviceTokens] = useState<DeviceToken[]>([])
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [generatingToken, setGeneratingToken] = useState(false)
   const [githubLinked, setGithubLinked] = useState<boolean | null>(null)
   const [unlinkingGithub, setUnlinkingGithub] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -33,11 +41,11 @@ export default function HomePage() {
     getSession()
     fetchRecordings()
     checkGithubLink()
+    fetchDeviceTokens()
   }, [])
 
   const getSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    setSession(session)
     setUser(session?.user ?? null)
   }
 
@@ -60,6 +68,70 @@ export default function HomePage() {
     } finally {
       setUnlinkingGithub(false)
     }
+  }
+
+  const fetchDeviceTokens = async () => {
+    const { data, error } = await supabase
+      .from('device_tokens')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setDeviceTokens(data)
+    }
+  }
+
+  const generateDeviceToken = async () => {
+    if (!user) return
+
+    setGeneratingToken(true)
+    try {
+      // Generate a random token
+      const tokenBytes = new Uint8Array(32)
+      crypto.getRandomValues(tokenBytes)
+      const token = Array.from(tokenBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+
+      // Set expiration to 1 year from now
+      const expiresAt = new Date()
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+
+      const { error } = await supabase
+        .from('device_tokens')
+        .insert({
+          user_id: user.id,
+          token: token,
+          name: `Device ${deviceTokens.length + 1}`,
+          expires_at: expiresAt.toISOString(),
+        })
+
+      if (error) throw error
+
+      setNewToken(token)
+      fetchDeviceTokens()
+    } catch (error) {
+      console.error('Failed to generate token:', error)
+      alert('Failed to generate token')
+    } finally {
+      setGeneratingToken(false)
+    }
+  }
+
+  const revokeDeviceToken = async (tokenId: string) => {
+    const { error } = await supabase
+      .from('device_tokens')
+      .delete()
+      .eq('id', tokenId)
+
+    if (!error) {
+      fetchDeviceTokens()
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    alert('Copied to clipboard!')
   }
 
   const fetchRecordings = async () => {
@@ -131,22 +203,6 @@ export default function HomePage() {
     window.location.href = '/login'
   }
 
-  const generateDeviceToken = async () => {
-    if (!session?.access_token) {
-      alert('No session available')
-      return
-    }
-    setDeviceToken(session.access_token)
-    setShowToken(true)
-  }
-
-  const copyToken = () => {
-    if (deviceToken) {
-      navigator.clipboard.writeText(deviceToken)
-      alert('Token copied to clipboard!')
-    }
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
@@ -205,34 +261,59 @@ export default function HomePage() {
 
         {/* Device Token Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Device Token</h2>
+          <h2 className="text-lg font-semibold mb-4">Device Tokens</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Generate a token for your ESP32 device to upload recordings.
+            Generate long-lived tokens (1 year) for your ESP32 devices.
           </p>
           <button
             onClick={generateDeviceToken}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+            disabled={generatingToken}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium disabled:opacity-50"
           >
-            Generate Device Token
+            {generatingToken ? 'Generating...' : 'Generate New Token'}
           </button>
 
-          {showToken && deviceToken && (
-            <div className="mt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-medium text-gray-700">Access Token:</span>
+          {newToken && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-green-800">New Token Created!</span>
                 <button
-                  onClick={copyToken}
-                  className="text-xs text-blue-600 hover:text-blue-500"
+                  onClick={() => copyToClipboard(newToken)}
+                  className="text-xs text-green-600 hover:text-green-500"
                 >
                   Copy
                 </button>
               </div>
-              <div className="bg-gray-100 p-3 rounded-md overflow-x-auto">
-                <code className="text-xs text-gray-800 break-all">{deviceToken}</code>
+              <div className="bg-white p-3 rounded-md overflow-x-auto border">
+                <code className="text-xs text-gray-800 break-all">{newToken}</code>
               </div>
               <p className="mt-2 text-xs text-amber-600">
-                Note: This token expires. You may need to regenerate it periodically.
+                Save this token now! It won&apos;t be shown again.
               </p>
+            </div>
+          )}
+
+          {deviceTokens.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Active Tokens</h3>
+              <ul className="space-y-2">
+                {deviceTokens.map((token) => (
+                  <li key={token.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">{token.name || 'Unnamed Device'}</span>
+                      <p className="text-xs text-gray-500">
+                        Expires: {formatDate(token.expires_at)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => revokeDeviceToken(token.id)}
+                      className="text-xs text-red-600 hover:text-red-500"
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
