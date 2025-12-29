@@ -22,6 +22,7 @@ jobs:
           prompt: "recording_id: ${{ github.event.inputs.recording_id }}"
           session-id: ${{ vars.VM0_SESSION_ID }}
           vm0-token: ${{ secrets.VM0_TOKEN }}
+          silent: true
           secrets: |
             CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
             ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
