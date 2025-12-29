@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "x-device-token, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-device-token, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -25,37 +25,60 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Authentication: x-device-token only
+  // Authentication: x-device-token or JWT Bearer token
   const deviceToken = req.headers.get("x-device-token");
+  const authHeader = req.headers.get("authorization");
+  let userId: string;
 
-  if (!deviceToken) {
-    return new Response(JSON.stringify({ error: "Missing x-device-token header" }), {
+  if (deviceToken) {
+    // Device token authentication (ESP32)
+    console.log("Auth method: device token");
+    const { data: tokenData, error: tokenError } = await supabaseAdmin
+      .from("device_tokens")
+      .select("user_id, expires_at")
+      .eq("token", deviceToken)
+      .single();
+
+    if (tokenError || !tokenData) {
+      return new Response(JSON.stringify({ error: "Invalid device token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return new Response(JSON.stringify({ error: "Device token expired" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    userId = tokenData.user_id;
+  } else if (authHeader?.startsWith("Bearer ")) {
+    // JWT authentication (Web)
+    console.log("Auth method: JWT Bearer token");
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error("JWT auth error:", authError?.message);
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    userId = user.id;
+  } else {
+    return new Response(JSON.stringify({ error: "Missing authentication" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  const { data: tokenData, error: tokenError } = await supabaseAdmin
-    .from("device_tokens")
-    .select("user_id, expires_at")
-    .eq("token", deviceToken)
-    .single();
-
-  if (tokenError || !tokenData) {
-    return new Response(JSON.stringify({ error: "Invalid device token" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  if (new Date(tokenData.expires_at) < new Date()) {
-    return new Response(JSON.stringify({ error: "Device token expired" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const userId = tokenData.user_id;
+  console.log("Authenticated user:", userId);
 
   // Get user's GitHub token and repo from database
   let githubToken: string | null = null;

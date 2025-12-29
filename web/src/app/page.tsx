@@ -241,28 +241,31 @@ export default function HomePage() {
 
     setUploading(true)
     try {
-      const timestamp = Date.now()
-      const filePath = `user/${user.id}/${timestamp}_recording.webm`
+      // Get current session for JWT token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No access token')
+      }
 
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('recordings')
-        .upload(filePath, blob, { contentType: 'audio/webm' })
+      // Upload via Edge Function to trigger GitHub workflow
+      const formData = new FormData()
+      formData.append('file', blob, `recording_${Date.now()}.webm`)
 
-      if (uploadError) throw uploadError
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upload-recording`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      )
 
-      // Create database record with user_id and duration
-      const { error: dbError } = await supabase
-        .from('recordings')
-        .insert({
-          file_path: filePath,
-          sender: 'user',
-          status: 'pending',
-          user_id: user.id,
-          duration: Math.round(duration),
-        })
-
-      if (dbError) throw dbError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Upload failed')
+      }
 
       // Refresh list
       fetchRecordings()
