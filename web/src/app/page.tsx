@@ -312,21 +312,13 @@ export default function HomePage() {
       audioRef.current.src = data.publicUrl
       audioRef.current.play()
       setPlayingId(recording.id)
-    }
-  }
 
-  const markAsPlayed = async (recordingId: string) => {
-    await supabase
-      .from('recordings')
-      .update({ status: 'done', played: true })
-      .eq('id', recordingId)
-  }
-
-  const handleAudioEnded = async () => {
-    if (playingId) {
-      await markAsPlayed(playingId)
+      // Mark as played when user clicks play
+      await supabase
+        .from('recordings')
+        .update({ status: 'done', played: true })
+        .eq('id', recording.id)
     }
-    setPlayingId(null)
   }
 
   const handleSignOut = async () => {
@@ -598,7 +590,7 @@ export default function HomePage() {
 
         <audio
           ref={audioRef}
-          onEnded={handleAudioEnded}
+          onEnded={() => setPlayingId(null)}
           className="hidden"
         />
       </main>
