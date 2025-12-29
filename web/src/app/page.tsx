@@ -51,6 +51,26 @@ export default function HomePage() {
     fetchRecordings()
     checkGithubLink()
     fetchDeviceTokens()
+
+    // Subscribe to realtime updates for recordings
+    const channel = supabase
+      .channel('recordings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recordings',
+        },
+        () => {
+          fetchRecordings()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const getSession = async () => {
