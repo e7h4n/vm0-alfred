@@ -96,6 +96,7 @@ export default function HomePage() {
   }
 
   const fetchRepos = async () => {
+    setGithubRepo(null)
     setLoadingRepos(true)
     try {
       const response = await fetch('/api/github/repos')
