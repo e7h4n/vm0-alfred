@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-api-key, x-device-token, content-type",
+  "Access-Control-Allow-Headers": "x-device-token, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -25,84 +25,48 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Authentication: support x-device-token, JWT Bearer token, or x-api-key
-  let userId: string | null = null;
-  let githubToken: string | null = null;
-
+  // Authentication: x-device-token only
   const deviceToken = req.headers.get("x-device-token");
-  const authHeader = req.headers.get("authorization");
-  const apiKey = req.headers.get("x-api-key");
-  const expectedKey = Deno.env.get("UPLOAD_API_KEY");
 
-  if (deviceToken) {
-    // Device token authentication (long-lived, 1 year)
-    const { data: tokenData, error: tokenError } = await supabaseAdmin
-      .from("device_tokens")
-      .select("user_id, expires_at")
-      .eq("token", deviceToken)
-      .single();
-
-    if (tokenError || !tokenData) {
-      return new Response(JSON.stringify({ error: "Invalid device token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check expiration
-    if (new Date(tokenData.expires_at) < new Date()) {
-      return new Response(JSON.stringify({ error: "Device token expired" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    userId = tokenData.user_id;
-
-    // Get user's GitHub token from database
-    const { data: ghToken } = await supabaseAdmin
-      .from("github_tokens")
-      .select("access_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (ghToken) {
-      githubToken = ghToken.access_token;
-    }
-  } else if (authHeader?.startsWith("Bearer ")) {
-    // JWT authentication - extract user from token
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    userId = user.id;
-
-    // Get user's GitHub token from database
-    const { data: tokenData } = await supabaseAdmin
-      .from("github_tokens")
-      .select("access_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (tokenData) {
-      githubToken = tokenData.access_token;
-    }
-  } else if (apiKey && apiKey === expectedKey) {
-    // API key authentication (legacy for ESP32 without user context)
-    githubToken = Deno.env.get("GITHUB_TOKEN") || null;
-  } else {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+  if (!deviceToken) {
+    return new Response(JSON.stringify({ error: "Missing x-device-token header" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  const { data: tokenData, error: tokenError } = await supabaseAdmin
+    .from("device_tokens")
+    .select("user_id, expires_at")
+    .eq("token", deviceToken)
+    .single();
+
+  if (tokenError || !tokenData) {
+    return new Response(JSON.stringify({ error: "Invalid device token" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (new Date(tokenData.expires_at) < new Date()) {
+    return new Response(JSON.stringify({ error: "Device token expired" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const userId = tokenData.user_id;
+
+  // Get user's GitHub token from database
+  let githubToken: string | null = null;
+  const { data: ghToken } = await supabaseAdmin
+    .from("github_tokens")
+    .select("access_token")
+    .eq("user_id", userId)
+    .single();
+
+  if (ghToken) {
+    githubToken = ghToken.access_token;
   }
 
   try {
@@ -143,8 +107,7 @@ serve(async (req) => {
 
     // Generate unique file path
     const timestamp = Date.now();
-    const pathPrefix = userId ? `user/${userId}` : "user";
-    const filePath = `${pathPrefix}/${timestamp}_${filename}`;
+    const filePath = `user/${userId}/${timestamp}_${filename}`;
 
     // Upload to Storage
     const { error: uploadError } = await supabaseAdmin.storage
@@ -163,18 +126,14 @@ serve(async (req) => {
     }
 
     // Insert record into database
-    const recordData: Record<string, unknown> = {
-      file_path: filePath,
-      sender: "user",
-      status: "pending",
-    };
-    if (userId) {
-      recordData.user_id = userId;
-    }
-
     const { data: recording, error: dbError } = await supabaseAdmin
       .from("recordings")
-      .insert(recordData)
+      .insert({
+        file_path: filePath,
+        sender: "user",
+        status: "pending",
+        user_id: userId,
+      })
       .select()
       .single();
 
