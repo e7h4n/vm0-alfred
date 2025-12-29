@@ -33,6 +33,9 @@ export default function HomePage() {
   const [newToken, setNewToken] = useState<string | null>(null)
   const [generatingToken, setGeneratingToken] = useState(false)
   const [githubLinked, setGithubLinked] = useState<boolean | null>(null)
+  const [githubRepo, setGithubRepo] = useState<string | null>(null)
+  const [repos, setRepos] = useState<{ full_name: string; private: boolean }[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
   const [unlinkingGithub, setUnlinkingGithub] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -58,10 +61,43 @@ export default function HomePage() {
   const checkGithubLink = async () => {
     const { data, error } = await supabase
       .from('github_tokens')
-      .select('id')
+      .select('id, github_repo')
       .single()
 
-    setGithubLinked(!error && !!data)
+    if (!error && data) {
+      setGithubLinked(true)
+      setGithubRepo(data.github_repo)
+      if (data.github_repo === null) {
+        fetchRepos()
+      }
+    } else {
+      setGithubLinked(false)
+    }
+  }
+
+  const fetchRepos = async () => {
+    setLoadingRepos(true)
+    try {
+      const response = await fetch('/api/github/repos')
+      if (response.ok) {
+        const data = await response.json()
+        setRepos(data.repos)
+      }
+    } finally {
+      setLoadingRepos(false)
+    }
+  }
+
+  const selectRepo = async (repo: string) => {
+    const response = await fetch('/api/github/select-repo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo }),
+    })
+    if (response.ok) {
+      setGithubRepo(repo)
+      setRepos([])
+    }
   }
 
   const unlinkGithub = async () => {
@@ -287,22 +323,66 @@ export default function HomePage() {
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">GitHub Integration</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Link your GitHub account to enable workflow triggers when you upload recordings.
+            Link your GitHub account and select a repo to trigger on-voice.yaml workflow.
           </p>
           {githubLinked === null ? (
             <p className="text-sm text-gray-500">Checking...</p>
           ) : githubLinked ? (
-            <div className="flex items-center gap-4">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                GitHub Connected
-              </span>
-              <button
-                onClick={unlinkGithub}
-                disabled={unlinkingGithub}
-                className="text-sm text-red-600 hover:text-red-500 disabled:opacity-50"
-              >
-                {unlinkingGithub ? 'Unlinking...' : 'Unlink'}
-              </button>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                  GitHub Connected
+                </span>
+                <button
+                  onClick={unlinkGithub}
+                  disabled={unlinkingGithub}
+                  className="text-sm text-red-600 hover:text-red-500 disabled:opacity-50"
+                >
+                  {unlinkingGithub ? 'Unlinking...' : 'Unlink'}
+                </button>
+              </div>
+
+              {githubRepo ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600">Repository:</span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-gray-100 text-gray-800">
+                    {githubRepo}
+                  </span>
+                  <button
+                    onClick={fetchRepos}
+                    className="text-sm text-blue-600 hover:text-blue-500"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : loadingRepos ? (
+                <p className="text-sm text-gray-500">Loading repositories...</p>
+              ) : repos.length > 0 ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Repository
+                  </label>
+                  <select
+                    onChange={(e) => selectRepo(e.target.value)}
+                    defaultValue=""
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value="" disabled>Choose a repository...</option>
+                    {repos.map((repo) => (
+                      <option key={repo.full_name} value={repo.full_name}>
+                        {repo.full_name} {repo.private ? '(private)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <button
+                  onClick={fetchRepos}
+                  className="text-sm text-blue-600 hover:text-blue-500"
+                >
+                  Select a repository
+                </button>
+              )}
             </div>
           ) : (
             <a

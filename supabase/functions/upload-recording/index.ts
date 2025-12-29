@@ -57,16 +57,18 @@ serve(async (req) => {
 
   const userId = tokenData.user_id;
 
-  // Get user's GitHub token from database
+  // Get user's GitHub token and repo from database
   let githubToken: string | null = null;
-  const { data: ghToken } = await supabaseAdmin
+  let githubRepo: string | null = null;
+  const { data: ghData } = await supabaseAdmin
     .from("github_tokens")
-    .select("access_token")
+    .select("access_token, github_repo")
     .eq("user_id", userId)
     .single();
 
-  if (ghToken) {
-    githubToken = ghToken.access_token;
+  if (ghData) {
+    githubToken = ghData.access_token;
+    githubRepo = ghData.github_repo;
   }
 
   try {
@@ -147,11 +149,11 @@ serve(async (req) => {
       });
     }
 
-    // Trigger GitHub Actions workflow using the user's linked GitHub token
-    if (githubToken) {
+    // Trigger GitHub Actions workflow using the user's linked GitHub token and repo
+    if (githubToken && githubRepo) {
       try {
         const workflowResponse = await fetch(
-          "https://api.github.com/repos/e7h4n/vm0-alfred/actions/workflows/on-voice.yaml/dispatches",
+          `https://api.github.com/repos/${githubRepo}/actions/workflows/on-voice.yaml/dispatches`,
           {
             method: "POST",
             headers: {
