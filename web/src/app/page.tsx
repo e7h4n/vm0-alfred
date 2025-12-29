@@ -68,7 +68,7 @@ export default function HomePage() {
       if (uploadError) throw uploadError
 
       // Create database record with user_id
-      const { error: dbError } = await supabase
+      const { data: recording, error: dbError } = await supabase
         .from('recordings')
         .insert({
           file_path: filePath,
@@ -76,8 +76,21 @@ export default function HomePage() {
           status: 'pending',
           user_id: user.id,
         })
+        .select('id')
+        .single()
 
       if (dbError) throw dbError
+
+      // Trigger GitHub Actions workflow
+      const triggerResponse = await fetch('/api/trigger-workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recording_id: recording.id }),
+      })
+
+      if (!triggerResponse.ok) {
+        console.error('Failed to trigger workflow')
+      }
 
       // Refresh list
       fetchRecordings()
