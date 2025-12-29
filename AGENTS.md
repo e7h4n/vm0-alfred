@@ -129,9 +129,35 @@ curl -X PATCH "$SUPABASE_URL/functions/v1/update-recording?id=$RECORDING_ID" \
   -d '{"status": "done"}'
 ```
 
+## OpenAI TTS
+
+When generating audio response, use a JSON file to avoid escaping issues:
+
+```bash
+# Write JSON to file first (handles special characters safely)
+cat > /tmp/tts_request.json << 'JSONEOF'
+{
+  "model": "tts-1",
+  "input": "你的回复文本",
+  "voice": "nova"
+}
+JSONEOF
+
+# Call OpenAI TTS API with JSON file
+curl -s "https://api.openai.com/v1/audio/speech" \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d @/tmp/tts_request.json \
+  --output /tmp/ai_response.mp3
+
+# Verify the output is valid audio (not an error JSON)
+file /tmp/ai_response.mp3
+```
+
 ## Important
 
 - Always respond in the same language as the user's input
 - User recording status flow: `pending` -> `processing` -> `done`
 - AI recording: status is always `pending`, played is `false` (user marks as played after listening)
 - All operations require `x-device-token` header with `ALFRED_TOKEN` secret
+- Always verify TTS output is audio before uploading (check with `file` command)
