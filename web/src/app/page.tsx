@@ -315,6 +315,20 @@ export default function HomePage() {
     }
   }
 
+  const markAsPlayed = async (recordingId: string) => {
+    await supabase
+      .from('recordings')
+      .update({ status: 'done', played: true })
+      .eq('id', recordingId)
+  }
+
+  const handleAudioEnded = async () => {
+    if (playingId) {
+      await markAsPlayed(playingId)
+    }
+    setPlayingId(null)
+  }
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -584,7 +598,7 @@ export default function HomePage() {
 
         <audio
           ref={audioRef}
-          onEnded={() => setPlayingId(null)}
+          onEnded={handleAudioEnded}
           className="hidden"
         />
       </main>
