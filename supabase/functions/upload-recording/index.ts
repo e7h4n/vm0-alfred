@@ -60,15 +60,20 @@ serve(async (req) => {
   // Get user's GitHub token and repo from database
   let githubToken: string | null = null;
   let githubRepo: string | null = null;
-  const { data: ghData } = await supabaseAdmin
+  const { data: ghData, error: ghError } = await supabaseAdmin
     .from("github_tokens")
     .select("access_token, github_repo")
     .eq("user_id", userId)
     .single();
 
+  console.log("GitHub token lookup:", { userId, hasData: !!ghData, error: ghError?.message });
+
   if (ghData) {
     githubToken = ghData.access_token;
     githubRepo = ghData.github_repo;
+    console.log("GitHub config:", { hasToken: !!githubToken, repo: githubRepo });
+  } else {
+    console.log("No GitHub token found for user");
   }
 
   try {
@@ -150,33 +155,42 @@ serve(async (req) => {
     }
 
     // Trigger GitHub Actions workflow using the user's linked GitHub token and repo
+    console.log("Workflow trigger check:", { hasToken: !!githubToken, hasRepo: !!githubRepo, repo: githubRepo });
+
     if (githubToken && githubRepo) {
+      const workflowUrl = `https://api.github.com/repos/${githubRepo}/actions/workflows/on-voice.yaml/dispatches`;
+      console.log("Triggering workflow:", { url: workflowUrl, recordingId: recording.id });
+
       try {
-        const workflowResponse = await fetch(
-          `https://api.github.com/repos/${githubRepo}/actions/workflows/on-voice.yaml/dispatches`,
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${githubToken}`,
-              "Accept": "application/vnd.github.v3+json",
-              "Content-Type": "application/json",
-              "User-Agent": "supabase-edge-function",
+        const workflowResponse = await fetch(workflowUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${githubToken}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+            "User-Agent": "supabase-edge-function",
+          },
+          body: JSON.stringify({
+            ref: "main",
+            inputs: {
+              recording_id: recording.id,
             },
-            body: JSON.stringify({
-              ref: "main",
-              inputs: {
-                recording_id: recording.id,
-              },
-            }),
-          }
-        );
+          }),
+        });
+
+        console.log("Workflow response status:", workflowResponse.status);
 
         if (!workflowResponse.ok) {
-          console.error("Failed to trigger workflow:", await workflowResponse.text());
+          const errorText = await workflowResponse.text();
+          console.error("Failed to trigger workflow:", { status: workflowResponse.status, error: errorText });
+        } else {
+          console.log("Workflow triggered successfully");
         }
       } catch (workflowError) {
         console.error("Error triggering workflow:", workflowError);
       }
+    } else {
+      console.log("Skipping workflow trigger - missing token or repo");
     }
 
     // Return success response
