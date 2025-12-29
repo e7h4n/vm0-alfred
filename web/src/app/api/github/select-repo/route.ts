@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import sodium from 'libsodium-wrappers'
+import { seal } from 'tweetsodium'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -55,8 +55,6 @@ export async function POST(request: Request) {
 
   // Set GitHub secret
   try {
-    await sodium.ready
-
     // Get repo public key
     const keyResponse = await fetch(
       `https://api.github.com/repos/${repo}/actions/secrets/public-key`,
@@ -76,11 +74,11 @@ export async function POST(request: Request) {
 
     const { key, key_id } = await keyResponse.json()
 
-    // Encrypt the token
-    const binkey = sodium.from_base64(key, sodium.base64_variants.ORIGINAL)
-    const binsec = sodium.from_string(deviceToken)
-    const encBytes = sodium.crypto_box_seal(binsec, binkey)
-    const encryptedValue = sodium.to_base64(encBytes, sodium.base64_variants.ORIGINAL)
+    // Encrypt the token using sealed box
+    const publicKey = Buffer.from(key, 'base64')
+    const messageBytes = Buffer.from(deviceToken)
+    const encryptedBytes = seal(messageBytes, publicKey)
+    const encryptedValue = Buffer.from(encryptedBytes).toString('base64')
 
     // Set the secret
     const secretResponse = await fetch(
