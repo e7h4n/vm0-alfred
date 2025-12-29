@@ -20,11 +20,49 @@ serve(async (req) => {
     });
   }
 
-  // Verify API key
+  // Initialize Supabase client (service role for admin operations)
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Authentication: support both x-api-key and JWT Bearer token
+  let userId: string | null = null;
+  let githubToken: string | null = null;
+
+  const authHeader = req.headers.get("authorization");
   const apiKey = req.headers.get("x-api-key");
   const expectedKey = Deno.env.get("UPLOAD_API_KEY");
 
-  if (!apiKey || apiKey !== expectedKey) {
+  if (authHeader?.startsWith("Bearer ")) {
+    // JWT authentication - extract user from token
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    userId = user.id;
+
+    // Get user's GitHub token from database
+    const { data: tokenData } = await supabaseAdmin
+      .from("github_tokens")
+      .select("access_token")
+      .eq("user_id", userId)
+      .single();
+
+    if (tokenData) {
+      githubToken = tokenData.access_token;
+    }
+  } else if (apiKey && apiKey === expectedKey) {
+    // API key authentication (legacy for ESP32 without user context)
+    githubToken = Deno.env.get("GITHUB_TOKEN") || null;
+  } else {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -67,17 +105,13 @@ serve(async (req) => {
       });
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
     // Generate unique file path
     const timestamp = Date.now();
-    const filePath = `user/${timestamp}_${filename}`;
+    const pathPrefix = userId ? `user/${userId}` : "user";
+    const filePath = `${pathPrefix}/${timestamp}_${filename}`;
 
     // Upload to Storage
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from("recordings")
       .upload(filePath, audioData, {
         contentType: mimeType,
@@ -93,28 +127,32 @@ serve(async (req) => {
     }
 
     // Insert record into database
-    const { data: recording, error: dbError } = await supabase
+    const recordData: Record<string, unknown> = {
+      file_path: filePath,
+      sender: "user",
+      status: "pending",
+    };
+    if (userId) {
+      recordData.user_id = userId;
+    }
+
+    const { data: recording, error: dbError } = await supabaseAdmin
       .from("recordings")
-      .insert({
-        file_path: filePath,
-        sender: "user",
-        status: "pending",
-      })
+      .insert(recordData)
       .select()
       .single();
 
     if (dbError) {
       console.error("Database error:", dbError);
       // Try to clean up uploaded file
-      await supabase.storage.from("recordings").remove([filePath]);
+      await supabaseAdmin.storage.from("recordings").remove([filePath]);
       return new Response(JSON.stringify({ error: "Failed to create record", details: dbError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Trigger GitHub Actions workflow
-    const githubToken = Deno.env.get("GITHUB_TOKEN");
+    // Trigger GitHub Actions workflow using the user's linked GitHub token
     if (githubToken) {
       try {
         const workflowResponse = await fetch(

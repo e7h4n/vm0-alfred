@@ -24,18 +24,42 @@ export default function HomePage() {
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [showToken, setShowToken] = useState(false)
   const [deviceToken, setDeviceToken] = useState<string | null>(null)
+  const [githubLinked, setGithubLinked] = useState<boolean | null>(null)
+  const [unlinkingGithub, setUnlinkingGithub] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
     getSession()
     fetchRecordings()
+    checkGithubLink()
   }, [])
 
   const getSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     setSession(session)
     setUser(session?.user ?? null)
+  }
+
+  const checkGithubLink = async () => {
+    const { data, error } = await supabase
+      .from('github_tokens')
+      .select('id')
+      .single()
+
+    setGithubLinked(!error && !!data)
+  }
+
+  const unlinkGithub = async () => {
+    setUnlinkingGithub(true)
+    try {
+      const response = await fetch('/api/github/unlink', { method: 'POST' })
+      if (response.ok) {
+        setGithubLinked(false)
+      }
+    } finally {
+      setUnlinkingGithub(false)
+    }
   }
 
   const fetchRecordings = async () => {
@@ -145,6 +169,40 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* GitHub Link Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-4">GitHub Integration</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Link your GitHub account to enable workflow triggers when you upload recordings.
+          </p>
+          {githubLinked === null ? (
+            <p className="text-sm text-gray-500">Checking...</p>
+          ) : githubLinked ? (
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                GitHub Connected
+              </span>
+              <button
+                onClick={unlinkGithub}
+                disabled={unlinkingGithub}
+                className="text-sm text-red-600 hover:text-red-500 disabled:opacity-50"
+              >
+                {unlinkingGithub ? 'Unlinking...' : 'Unlink'}
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/api/github/authorize"
+              className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 text-sm font-medium"
+            >
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              Link GitHub
+            </a>
+          )}
+        </div>
+
         {/* Device Token Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Device Token</h2>
