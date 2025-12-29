@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState, useRef } from 'react'
-import { User } from '@supabase/supabase-js'
+import { User, Session } from '@supabase/supabase-js'
 
 interface Recording {
   id: string
@@ -17,21 +17,25 @@ interface Recording {
 
 export default function HomePage() {
   const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [playingId, setPlayingId] = useState<string | null>(null)
+  const [showToken, setShowToken] = useState(false)
+  const [deviceToken, setDeviceToken] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
-    getUser()
+    getSession()
     fetchRecordings()
   }, [])
 
-  const getUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
+  const getSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    setSession(session)
+    setUser(session?.user ?? null)
   }
 
   const fetchRecordings = async () => {
@@ -49,12 +53,12 @@ export default function HomePage() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !user) return
 
     setUploading(true)
     try {
       const timestamp = Date.now()
-      const filePath = `user/${timestamp}_${file.name}`
+      const filePath = `user/${user.id}/${timestamp}_${file.name}`
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
@@ -63,13 +67,14 @@ export default function HomePage() {
 
       if (uploadError) throw uploadError
 
-      // Create database record
+      // Create database record with user_id
       const { error: dbError } = await supabase
         .from('recordings')
         .insert({
           file_path: filePath,
           sender: 'user',
           status: 'pending',
+          user_id: user.id,
         })
 
       if (dbError) throw dbError
@@ -102,6 +107,22 @@ export default function HomePage() {
     window.location.href = '/login'
   }
 
+  const generateDeviceToken = async () => {
+    if (!session?.access_token) {
+      alert('No session available')
+      return
+    }
+    setDeviceToken(session.access_token)
+    setShowToken(true)
+  }
+
+  const copyToken = () => {
+    if (deviceToken) {
+      navigator.clipboard.writeText(deviceToken)
+      alert('Token copied to clipboard!')
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
@@ -124,6 +145,40 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Device Token Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-4">Device Token</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Generate a token for your ESP32 device to upload recordings.
+          </p>
+          <button
+            onClick={generateDeviceToken}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+          >
+            Generate Device Token
+          </button>
+
+          {showToken && deviceToken && (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-gray-700">Access Token:</span>
+                <button
+                  onClick={copyToken}
+                  className="text-xs text-blue-600 hover:text-blue-500"
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="bg-gray-100 p-3 rounded-md overflow-x-auto">
+                <code className="text-xs text-gray-800 break-all">{deviceToken}</code>
+              </div>
+              <p className="mt-2 text-xs text-amber-600">
+                Note: This token expires. You may need to regenerate it periodically.
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Upload Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Upload Recording</h2>
